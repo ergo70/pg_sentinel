@@ -28,6 +28,7 @@ static int relation_oid;
 static int col_no;
 static int elevel = FATAL;
 static char *sentinel_value;
+static size_t  sentinel_value_len;
 
 static ExecutorRun_hook_type prev_ExecutorRun_hook = NULL;
 
@@ -49,7 +50,7 @@ ExecutePlan(EState *estate,
 {
     TupleTableSlot *slot;
     HeapTuple tuple;
-    uint64		current_tuple_count;
+    uint64	current_tuple_count;
 
     /*
      * initialize local variables
@@ -142,7 +143,7 @@ ExecutePlan(EState *estate,
             if(tuple != NULL && tuple->t_tableOid == relation_oid)
             {
                 char *col_val = SPI_getvalue(tuple, slot->tts_tupleDescriptor, col_no);
-                if(strncmp(sentinel_value,col_val,strlen(sentinel_value)) == 0)
+                if(strncmp(sentinel_value,col_val,sentinel_value_len) == 0)
                     ereport(elevel, (errmsg("Severe internal error detected!"))); /* ERROR - terminate the statement. FATAL - terminate the connection. */
             }
             (estate->es_processed)++;
@@ -231,6 +232,8 @@ _PG_init(void)
     {
         elevel = ERROR;
     }
+
+    sentinel_value_len = strlen(sentinel_value);
 }
 
 /*
