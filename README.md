@@ -47,6 +47,12 @@ All settings can only be set in postgresql.conf and only at startup.
 They must not and can not be changed a posteriori by SET or SIGHUP to
 avoid tampering.
 
+Important
+---------
+
+The module does not protect against `COPY <tablename> TO`, however it works 
+when `COPY` is used with a query, like `COPY (SELECT * FROM <tablename>) TO`.
+
 Building and Installing
 -----------------------
 
