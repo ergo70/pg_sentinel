@@ -2,10 +2,8 @@
  *
  * pg_sentinel.c
  *
- * Loadable PostgreSQL module to filter statements according to configured
- * criteria and stop them before they start to run.
- *
- * The currently implemented criterion is the plan's estimated maximum cost.
+ * Loadable PostgreSQL module to abort queries if a certain sentinel value
+ * is SELECTed. E.g. in case of a SQL injection attack.
  *
  * Copyright 2016 Ernst-Georg Schmid
  *
