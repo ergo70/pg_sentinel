@@ -23,11 +23,12 @@
 
 PG_MODULE_MAGIC;
 
-static bool abort_statement_only = false;
+static bool abort_statement_only;
 static int relation_oid;
 static int col_no;
-static int elevel = FATAL;
+static int elevel;
 static char *sentinel_value;
+static char *sentinel_errmsg;
 static size_t  sentinel_value_len;
 
 static ExecutorRun_hook_type prev_ExecutorRun_hook = NULL;
@@ -144,7 +145,7 @@ ExecutePlan(EState *estate,
             {
                 char *col_val = SPI_getvalue(tuple, slot->tts_tupleDescriptor, col_no);
                 if(strncmp(sentinel_value,col_val,sentinel_value_len) == 0)
-                    ereport(elevel, (errmsg("Severe internal error detected!"))); /* ERROR - terminate the statement. FATAL - terminate the connection. */
+                    ereport(elevel, (errmsg("%s",sentinel_errmsg))); /* ERROR - terminate the statement. FATAL - terminate the connection. */
             }
             (estate->es_processed)++;
         }
@@ -212,6 +213,18 @@ _PG_init(void)
                                NULL);
 
     /* Define custom GUC variable. */
+    DefineCustomStringVariable("pg_sentinel.sentinel_message",
+                               "Sets the error message.",
+                               "Default: 'Severe internal error detected!'",
+                               &sentinel_errmsg,
+                               "Severe internal error detected!",
+                               PGC_POSTMASTER,
+                               0, /* no flags required */
+                               NULL,
+                               NULL,
+                               NULL);
+
+    /* Define custom GUC variable. */
     DefineCustomBoolVariable("pg_sentinel.abort_statement_only",
                              "Controls if only the statement "
                              "or the connection is aborted.",
@@ -231,6 +244,10 @@ _PG_init(void)
     if (abort_statement_only)
     {
         elevel = ERROR;
+    }
+    else
+    {
+        elevel = FATAL;
     }
 
     sentinel_value_len = strlen(sentinel_value);

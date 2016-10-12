@@ -17,6 +17,7 @@ So, typical settings in the `postgresql.conf` file might be:
     pg_sentinel.relation_oid = 16389
     pg_sentinel.column_no = 2
     pg_sentinel.sentinel_value = 'SENTINEL'
+    pg_sentinel.sentinel_message = 'Hello Kitty!'
     pg_sentinel.abort_statement_only = false
 
 `relation_oid` is the Oid of the table containing the sentinel values.
@@ -37,6 +38,10 @@ The ordinal position of a column can be obtained as follows:
 If `abort_statement_only` is `true`, pg_sentinel will raise an `ERROR`, aborting
 the current query. By default it is `false`, terminating the current connection
 with `FATAL`.
+
+`sentinel_message` sets the message that is reported with the error thrown. You may 
+set it to something expressionless yet unique that can easily be detected in the logs. 
+By default, it says "Severe internal error detected!".
 
 If you're using this with a version of PostgreSQL prior to 9.2, you will 
 need also to have a line like this before the above lines:
