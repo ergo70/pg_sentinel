@@ -5,7 +5,7 @@
  * Loadable PostgreSQL module to abort queries if a certain sentinel value
  * is SELECTed. E.g. in case of a SQL injection attack.
  *
- * Copyright 2016 Ernst-Georg Schmid
+ * Copyright 2016, 2022 Ernst-Georg Schmid
  *
  * Distributed under The PostgreSQL License
  * see License file for terms
@@ -16,9 +16,9 @@
 #include "fmgr.h"
 #include "funcapi.h"
 #include "executor/executor.h"
-#include "executor/spi.h"
 #include "access/xact.h"
 #include "utils/memutils.h"
+#include "utils/builtins.h"
 #include "utils/guc.h"
 
 PG_MODULE_MAGIC;
@@ -34,7 +34,7 @@ static size_t  sentinel_value_len;
 static ExecutorRun_hook_type prev_ExecutorRun_hook = NULL;
 
 static void sentinel_ExecutorRun(QueryDesc *queryDesc,
-                                 ScanDirection direction, uint64 count);
+                                 ScanDirection direction, uint64 count, bool execute_once);
 
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -50,13 +50,17 @@ ExecutePlan(EState *estate,
             DestReceiver *dest)
 {
     TupleTableSlot *slot;
-    HeapTuple tuple;
-    uint64	current_tuple_count;
+    char *col_val;
+    Datum datum;
+    uint64 current_tuple_count;
+    int internal_col_no;
 
     /*
      * initialize local variables
      */
     current_tuple_count = 0;
+
+    internal_col_no = col_no - 1;
 
     /*
      * Set the direction.
@@ -139,14 +143,18 @@ ExecutePlan(EState *estate,
              * trigger a defensive action.
              */
 
-            tuple = slot->tts_tuple;
-
-            if(tuple != NULL && tuple->t_tableOid == relation_oid)
+            if(slot != NULL)
             {
-                char *col_val = SPI_getvalue(tuple, slot->tts_tupleDescriptor, col_no);
-                if(strncmp(sentinel_value,col_val,sentinel_value_len) == 0)
-                    ereport(elevel, (errmsg("%s",sentinel_errmsg))); /* ERROR - terminate the statement. FATAL - terminate the connection. */
+                if(slot->tts_tableOid == relation_oid)
+                {
+                    datum = slot->tts_values[internal_col_no];
+                    col_val = TextDatumGetCString(datum);
+
+                    if(0 == strncmp(col_val, sentinel_value, sentinel_value_len))
+                        ereport(elevel, (errmsg("%s",sentinel_errmsg))); /* ERROR - terminate the statement. FATAL - terminate the connection. */
+                }
             }
+
             (estate->es_processed)++;
         }
 
@@ -265,7 +273,7 @@ _PG_fini(void)
 
 void
 sentinel_ExecutorRun(QueryDesc *queryDesc,
-                     ScanDirection direction, uint64 count)
+                     ScanDirection direction, uint64 count,bool execute_once)
 {
     EState	   *estate;
     CmdType		operation;
@@ -300,7 +308,6 @@ sentinel_ExecutorRun(QueryDesc *queryDesc,
      * startup tuple receiver, if we will be emitting tuples
      */
     estate->es_processed = 0;
-    estate->es_lastoid = InvalidOid;
 
     sendTuples = (operation == CMD_SELECT ||
                   queryDesc->plannedstmt->hasReturning);
